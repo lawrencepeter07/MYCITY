@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Help & Support - My City</title>
+    
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #1e293b; }
+        
+        /* Accordion Animation */
+        .faq-answer { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
+        .faq-open .faq-answer { max-height: 200px; }
+        .faq-icon { transition: transform 0.3s; }
+        .faq-open .faq-icon { transform: rotate(180deg); }
+
+        .animate-up { animation: slideUp 0.4s ease-out; }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        function SupportPage() {
+            const [openFaq, setOpenFaq] = useState(null);
+            const [submitted, setSubmitted] = useState(false);
+
+            const toggleFaq = (index) => {
+                setOpenFaq(openFaq === index ? null : index);
+            };
+
+            const handleFeedback = (e) => {
+                e.preventDefault();
+                setSubmitted(true);
+                setTimeout(() => window.location.href = 'index.html', 2000);
+            };
+
+            const faqs = [
+                { q: "How long does it take to fix a pothole?", a: "Standard response time is 24-48 hours for inspection. Repairs depend on severity, typically taking 3-7 days." },
+                { q: "How do I earn Civic Hero points?", a: "You earn 50 XP for every verified report you submit. Bonus points are awarded for Emergency reports and accurately tagged locations." },
+                { q: "Can I report issues anonymously?", a: "Yes, your name is not publicly displayed on the Community Feed. However, authorities can see your details to contact you if needed." },
+                { q: "What constitutes an 'Emergency'?", a: "Situations posing immediate threat to life (Live wires, Gas leaks, Open manholes). Misuse of SOS may lead to an account ban." },
+                { q: "My report was rejected. Why?", a: "Reports are rejected if the photo is unclear, duplicate, or not a valid civic issue (e.g., personal property disputes)." },
+            ];
+
+            return (
+                <div className="min-h-screen bg-gray-50 pb-10">
+                    
+                    {/* Header */}
+                    <div className="bg-blue-600 px-5 pt-6 pb-12 rounded-b-[2.5rem] shadow-xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -mr-10 -mt-10"></div>
+                        
+                        <div className="flex items-center gap-4 mb-6 relative z-10">
+                            <button onClick={() => window.location.href='index.html'} className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition text-white"><i className="fas fa-arrow-left"></i></button>
+                            <h1 className="font-bold text-xl text-white">Help Center</h1>
+                        </div>
+
+                        <div className="relative z-10">
+                            <h2 className="text-2xl font-black text-white mb-2">How can we help?</h2>
+                            <div className="relative">
+                                <i className="fas fa-search absolute left-4 top-3.5 text-gray-400"></i>
+                                <input type="text" placeholder="Search for issues..." className="w-full py-3 pl-10 pr-4 rounded-xl text-sm font-bold text-gray-700 outline-none shadow-lg focus:ring-2 focus:ring-blue-300" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-6 -mt-8 relative z-10 animate-up">
+                        
+                        {/* Contact Cards */}
+                        <div className="grid grid-cols-2 gap-4 mb-8">
+                            <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 text-center hover:shadow-md transition cursor-pointer" onClick={() => window.location.href='tel:1800-123-4567'}>
+                                <div className="w-10 h-10 mx-auto bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-2"><i className="fas fa-phone-alt"></i></div>
+                                <h3 className="font-bold text-gray-800 text-sm">City Helpline</h3>
+                                <p className="text-[10px] text-gray-500">24/7 Toll Free</p>
+                            </div>
+                            <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 text-center hover:shadow-md transition cursor-pointer" onClick={() => window.location.href='mailto:support@mycityapp.gov.in'}>
+                                <div className="w-10 h-10 mx-auto bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mb-2"><i className="fas fa-envelope"></i></div>
+                                <h3 className="font-bold text-gray-800 text-sm">App Support</h3>
+                                <p className="text-[10px] text-gray-500">Tech Issues</p>
+                            </div>
+                        </div>
+
+                        {/* FAQs */}
+                        <h3 className="font-bold text-gray-800 mb-4 px-1">Frequently Asked Questions</h3>
+                        <div className="space-y-3 mb-8">
+                            {faqs.map((faq, i) => (
+                                <div key={i} className={`bg-white rounded-xl border border-gray-100 overflow-hidden transition ${openFaq === i ? 'faq-open shadow-md border-blue-100' : 'shadow-sm'}`}>
+                                    <button onClick={() => toggleFaq(i)} className="w-full flex justify-between items-center p-4 text-left">
+                                        <span className="font-bold text-gray-700 text-sm pr-4">{faq.q}</span>
+                                        <i className="fas fa-chevron-down text-gray-400 text-xs faq-icon"></i>
+                                    </button>
+                                    <div className="faq-answer px-4 bg-gray-50">
+                                        <p className="text-xs text-gray-600 pb-4 leading-relaxed">{faq.a}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Feedback Form */}
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                            <h3 className="font-bold text-gray-800 mb-2">Still need help?</h3>
+                            <p className="text-xs text-gray-500 mb-4">Send us a message and we'll get back to you.</p>
+                            
+                            {!submitted ? (
+                                <form onSubmit={handleFeedback} className="space-y-3">
+                                    <input type="email" placeholder="Your Email" required className="w-full bg-gray-50 p-3 rounded-lg text-sm border border-gray-200 outline-none focus:border-blue-500" />
+                                    <textarea placeholder="Describe your issue..." required className="w-full bg-gray-50 p-3 rounded-lg text-sm border border-gray-200 outline-none focus:border-blue-500 h-24"></textarea>
+                                    <button type="submit" className="w-full bg-gray-900 text-white font-bold py-3 rounded-xl hover:bg-black transition">Send Message</button>
+                                </form>
+                            ) : (
+                                <div className="text-center py-8">
+                                    <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-3 text-xl"><i className="fas fa-check"></i></div>
+                                    <h3 className="font-bold text-gray-800">Message Sent!</h3>
+                                    <p className="text-xs text-gray-500">We will contact you shortly.</p>
+                                </div>
+                            )}
+                        </div>
+
+                    </div>
+                    
+                    {/* Footer Info */}
+                    <div className="text-center mt-8 text-[10px] text-gray-400">
+                        <p>App Version 1.0.4 (Beta)</p>
+                        <p>© 2024 Municipal Corporation</p>
+                    </div>
+
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<SupportPage />);
+    </script>
+</body>
+</html>

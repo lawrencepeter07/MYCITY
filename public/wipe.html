@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>⚠️ DATABASE WIPER</title>
+    <style>
+        body { font-family: monospace; background-color: #1a0505; color: #ffcccc; text-align: center; padding: 50px; }
+        h1 { color: #ff0000; font-size: 3rem; }
+        button { background: #ff0000; color: white; border: none; padding: 20px 40px; font-size: 20px; font-weight: bold; cursor: pointer; border-radius: 10px; margin-top: 20px; }
+        button:hover { background: #cc0000; }
+        #log { margin-top: 30px; text-align: left; background: #330000; padding: 20px; border: 1px solid #550000; height: 300px; overflow-y: scroll; }
+    </style>
+</head>
+<body>
+
+    <h1>⚠️ DANGER ZONE</h1>
+    <p>This will delete EVERY report in your database.</p>
+    <button onclick="wipeData()">DELETE ALL DATA</button>
+
+    <div id="log">Waiting for command...</div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // YOUR CONFIG
+        const firebaseConfig = {
+          apiKey: "AIzaSyCRXSzDVymPLQRjHwJuwh3nYC0FjtLys5o",
+          authDomain: "civic-36b64.firebaseapp.com",
+          projectId: "civic-36b64",
+          storageBucket: "civic-36b64.firebasestorage.app",
+          messagingSenderId: "946072651938",
+          appId: "1:946072651938:web:90652f9faa6e94313eeffb",
+          measurementId: "G-7GR579K7FF"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        window.wipeData = async () => {
+            if(!confirm("ARE YOU 100% SURE? THIS CANNOT BE UNDONE.")) return;
+            if(!confirm("REALLY? All user history will be lost.")) return;
+
+            const log = document.getElementById('log');
+            log.innerHTML = "🚀 Starting Deletion Sequence...\n";
+
+            try {
+                const querySnapshot = await getDocs(collection(db, "issues"));
+                
+                if (querySnapshot.empty) {
+                    log.innerHTML += "⚠️ Database is already empty.\n";
+                    return;
+                }
+
+                log.innerHTML += `Found ${querySnapshot.size} documents to delete.\n`;
+
+                const deletePromises = querySnapshot.docs.map((d) => {
+                    log.innerHTML += `🗑️ Deleting Ticket: ${d.id}...\n`;
+                    return deleteDoc(doc(db, "issues", d.id));
+                });
+
+                await Promise.all(deletePromises);
+
+                log.innerHTML += "\n✅ SUCCESS: All data has been wiped.\n";
+                log.innerHTML += "You can now start fresh or run the Seeder Script.";
+
+            } catch (e) {
+                log.innerHTML += `❌ ERROR: ${e.message}\n`;
+            }
+        };
+    </script>
+</body>
+</html>

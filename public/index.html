@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My City - Super App</title>
+    
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCRXSzDVymPLQRjHwJuwh3nYC0FjtLys5o" async defer></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .bg-premium { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); min-height: 100vh; }
+        .glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); }
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #2563eb; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .page-enter { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .pb-safe { padding-bottom: 90px; } /* Space for bottom nav */
+    </style>
+</head>
+<body>
+
+    <div id="root"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyCRXSzDVymPLQRjHwJuwh3nYC0FjtLys5o",
+          authDomain: "civic-36b64.firebaseapp.com",
+          projectId: "civic-36b64",
+          storageBucket: "civic-36b64.firebasestorage.app",
+          messagingSenderId: "946072651938",
+          appId: "1:946072651938:web:90652f9faa6e94313eeffb",
+          measurementId: "G-7GR579K7FF"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const provider = new GoogleAuthProvider();
+
+        window.fb = { auth, db, provider, signInWithPopup, signOut, onAuthStateChanged, doc, setDoc, getDoc, collection, query, where, getDocs, orderBy };
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- 1. HISTORY COMPONENT ---
+        function HistoryView({ user }) {
+            const [issues, setIssues] = useState([]);
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                const fetchHistory = async () => {
+                    try {
+                        const q = window.fb.query(window.fb.collection(window.fb.db, "issues"), window.fb.where("userId", "==", user.uid));
+                        const querySnapshot = await window.fb.getDocs(q);
+                        const list = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        list.sort((a, b) => b.timestamp.seconds - a.timestamp.seconds);
+                        setIssues(list);
+                    } catch (e) { console.error(e); }
+                    setLoading(false);
+                };
+                fetchHistory();
+            }, []);
+
+            if (loading) return <div className="p-10 text-center"><div className="loader mx-auto"></div></div>;
+
+            return (
+                <div className="p-5 page-enter pb-safe">
+                    <h2 className="text-xl font-bold mb-4 text-gray-800">My Activity</h2>
+                    {issues.length === 0 ? (
+                        <div className="text-center text-gray-400 mt-10">
+                            <i className="fas fa-folder-open text-4xl mb-3 opacity-30"></i>
+                            <p className="text-sm">No reports found.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {issues.map(issue => (
+                                <div key={issue.id} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex gap-3">
+                                    <div className="w-14 h-14 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 relative">
+                                        {issue.imageUrl ? <img src={issue.imageUrl} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-gray-300"><i className="fas fa-image"></i></div>}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex justify-between items-start">
+                                            <h3 className="font-bold text-gray-800 text-sm truncate pr-2">{issue.category}</h3>
+                                            <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase whitespace-nowrap ${issue.status === 'CRITICAL' ? 'bg-red-100 text-red-700' : issue.status === 'Solved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{issue.status}</span>
+                                        </div>
+                                        <p className="text-xs text-gray-500 mt-0.5 truncate">{issue.description}</p>
+                                        <div className="flex justify-between items-center mt-2">
+                                            <span className="text-[10px] text-gray-400 font-mono">{issue.ticketId}</span>
+                                            <span className="text-[10px] text-gray-400">{new Date(issue.timestamp.seconds * 1000).toLocaleDateString()}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // --- 2. MAP COMPONENT ---
+        function MapView() {
+            const mapRef = useRef(null);
+            useEffect(() => {
+                if (navigator.geolocation && window.google) {
+                    navigator.geolocation.getCurrentPosition((pos) => {
+                        const myLoc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                        const map = new google.maps.Map(mapRef.current, { center: myLoc, zoom: 15, disableDefaultUI: true });
+                        new google.maps.Marker({ position: myLoc, map: map, icon: { path: google.maps.SymbolPath.CIRCLE, scale: 10, fillColor: "#4285F4", fillOpacity: 1, strokeColor: "#ffffff", strokeWeight: 2 }, title: "You" });
+                    }, () => alert("Location Denied"));
+                }
+            }, []);
+            return (
+                <div className="h-screen w-full relative page-enter">
+                    <div ref={mapRef} className="h-full w-full"></div>
+                    <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-4 py-2 rounded-full shadow-lg font-bold text-sm text-gray-700"><i className="fas fa-dot-circle text-blue-500 mr-2 animate-pulse"></i> Live Location</div>
+                </div>
+            );
+        }
+
+        // --- 3. PROFILE COMPONENT ---
+        function ProfileView({ user, profile, onLogout }) {
+            return (
+                <div className="p-6 page-enter pb-safe">
+                    <h2 className="text-2xl font-bold mb-6">Profile</h2>
+                    <div className="bg-white rounded-3xl p-6 shadow-lg border border-gray-100 text-center relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-full h-20 bg-gradient-to-r from-blue-500 to-purple-600"></div>
+                        <img src={profile.photoURL} className="w-24 h-24 rounded-full border-4 border-white mx-auto relative z-10 shadow-md" />
+                        <h3 className="text-xl font-bold text-gray-800 mt-3">{profile.name}</h3>
+                        <p className="text-sm text-gray-500">{profile.email}</p>
+                        <div className="grid grid-cols-2 gap-4 mt-6">
+                            <div className="bg-gray-50 p-3 rounded-xl"><p className="text-xs text-gray-400 uppercase font-bold">District</p><p className="font-bold text-gray-800">{profile.district}</p></div>
+                            <div className="bg-gray-50 p-3 rounded-xl"><p className="text-xs text-gray-400 uppercase font-bold">Zone</p><p className="font-bold text-gray-800">{profile.zone}</p></div>
+                        </div>
+                    </div>
+                    <button onClick={onLogout} className="w-full mt-6 bg-red-50 text-red-600 font-bold py-4 rounded-xl flex items-center justify-center gap-2 hover:bg-red-100 transition"><i className="fas fa-sign-out-alt"></i> Logout</button>
+                </div>
+            );
+        }
+
+        // --- MAIN APP ---
+        function App() {
+            const [user, setUser] = useState(null);
+            const [profile, setProfile] = useState(null);
+            const [view, setView] = useState('home'); 
+            const [loading, setLoading] = useState(true);
+
+            useEffect(() => {
+                window.fb.onAuthStateChanged(window.fb.auth, async (u) => {
+                    if (u) {
+                        setUser(u);
+                        const docSnap = await window.fb.getDoc(window.fb.doc(window.fb.db, "users", u.uid));
+                        if (docSnap.exists()) setProfile(docSnap.data());
+                        else setProfile({ name: u.displayName, email: u.email, photoURL: u.photoURL, district: 'Chennai', zone: 'North' });
+                    } else setUser(null);
+                    setLoading(false);
+                });
+            }, []);
+
+            const handleLogin = async () => { try { await window.fb.signInWithPopup(window.fb.auth, window.fb.provider); } catch(e) { alert(e.message); } };
+            const handleLogout = async () => { await window.fb.signOut(window.fb.auth); setView('home'); };
+
+            if (loading) return <div className="h-screen w-full flex items-center justify-center bg-gray-50"><div className="loader"></div></div>;
+
+            if (!user) return (
+                <div className="bg-premium flex items-center justify-center p-6">
+                    <div className="glass-card w-full max-w-sm p-8 rounded-3xl text-center">
+                        <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-6">🏛️</div>
+                        <h1 className="text-2xl font-bold text-gray-800 mb-2">My City</h1>
+                        <p className="text-sm text-gray-500 mb-8">Civic reporting for Tamil Nadu.</p>
+                        <button onClick={handleLogin} className="w-full bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 font-bold py-3.5 rounded-xl flex items-center justify-center gap-3 transition shadow-sm">
+                            <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-5 h-5" /> Continue with Google
+                        </button>
+                    </div>
+                </div>
+            );
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    
+                    {/* View: HOME DASHBOARD */}
+                    {view === 'home' && (
+                        <div className="page-enter pb-safe">
+                            <nav className="bg-white sticky top-0 z-40 border-b border-gray-100 px-5 py-4 flex justify-between items-center shadow-sm">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-blue-600 text-white w-8 h-8 rounded-lg flex items-center justify-center text-sm shadow-md shadow-blue-200"><i className="fas fa-building"></i></div>
+                                    <div><h1 className="font-bold text-gray-800 text-sm leading-tight">My City</h1><p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">{profile?.district || 'Tamil Nadu'}</p></div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <img src={user.photoURL} onClick={() => setView('profile')} className="w-9 h-9 rounded-full border border-gray-200 cursor-pointer" />
+                                </div>
+                            </nav>
+
+                            <div className="px-6 pt-6">
+                                <h2 className="text-2xl font-bold text-gray-800">Hello, {user.displayName.split(' ')[0]} 👋</h2>
+                                <p className="text-gray-500 text-sm mt-1">Let's make our city better.</p>
+                            </div>
+
+                            <div className="p-6 grid grid-cols-2 gap-4">
+                                
+                                {/* 1. REPORT ISSUE */}
+                                <div onClick={() => window.location.href = "issuereporting.html"} className="col-span-2 bg-blue-600 rounded-3xl p-5 text-white shadow-xl shadow-blue-500/20 cursor-pointer transform transition hover:scale-[1.01] active:scale-95 flex items-center justify-between h-32 relative overflow-hidden group">
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
+                                    <div className="z-10">
+                                        <h3 className="font-bold text-2xl leading-tight mb-1">Report Issue</h3>
+                                        <p className="text-blue-100 text-sm font-medium opacity-90">AI Camera & Location</p>
+                                    </div>
+                                    <div className="bg-white/20 w-14 h-14 rounded-2xl flex items-center justify-center backdrop-blur-sm z-10"><i className="fas fa-camera text-2xl"></i></div>
+                                </div>
+
+                                {/* 2. SOS */}
+                                <div onClick={() => window.location.href="sos.html"} className="col-span-2 bg-red-500 rounded-3xl p-5 text-white shadow-xl shadow-red-500/20 cursor-pointer transform transition hover:scale-[1.01] active:scale-95 flex items-center justify-between h-24 relative overflow-hidden group">
+                                    <div className="absolute top-0 left-0 w-24 h-24 bg-white/10 rounded-full -ml-10 -mt-10 blur-xl"></div>
+                                    <div className="flex items-center gap-4 z-10">
+                                        <div className="bg-white/20 w-12 h-12 rounded-full flex items-center justify-center animate-pulse"><i className="fas fa-exclamation-triangle"></i></div>
+                                        <div><h3 className="font-bold text-lg leading-none">Emergency SOS</h3><p className="text-xs text-red-100 opacity-90 mt-1">Police, Fire, Hazards</p></div>
+                                    </div>
+                                    <i className="fas fa-chevron-right opacity-50"></i>
+                                </div>
+
+                                {/* 3. COMMUNITY */}
+                                <div onClick={() => window.location.href="community.html"} className="bg-white rounded-3xl p-5 border border-purple-100 cursor-pointer flex flex-col justify-between h-40 hover:shadow-lg transition group active:scale-95">
+                                    <div className="bg-purple-50 w-10 h-10 rounded-xl flex items-center justify-center text-purple-600"><i className="fas fa-users text-lg"></i></div>
+                                    <div><h3 className="font-bold text-lg text-purple-900 leading-tight">Community</h3><p className="text-[10px] text-purple-400 font-bold mt-1">Vote & Discuss</p></div>
+                                </div>
+
+                                {/* 4. NEW REQUEST */}
+                                <div onClick={() => window.location.href="request.html"} className="bg-white rounded-3xl p-5 border border-teal-100 cursor-pointer flex flex-col justify-between h-40 hover:shadow-lg transition group active:scale-95">
+                                    <div className="bg-teal-50 w-10 h-10 rounded-xl flex items-center justify-center text-teal-600"><i className="fas fa-plus-square text-lg"></i></div>
+                                    <div><h3 className="font-bold text-lg text-teal-900 leading-tight">New Request</h3><p className="text-[10px] text-teal-400 font-bold mt-1">Lights, Roads...</p></div>
+                                </div>
+
+                                {/* 5. CIVIC HERO */}
+                                <div onClick={() => window.location.href="civichero.html"} className="bg-white rounded-3xl p-5 border border-amber-100 cursor-pointer flex flex-col justify-between h-40 hover:shadow-lg transition group active:scale-95">
+                                    <div className="bg-amber-50 w-10 h-10 rounded-xl flex items-center justify-center text-amber-600"><i className="fas fa-medal text-lg"></i></div>
+                                    <div><h3 className="font-bold text-lg text-amber-900 leading-tight">Civic Hero</h3><p className="text-[10px] text-amber-400 font-bold mt-1">View Rank</p></div>
+                                </div>
+
+                                {/* 6. CITY STATS (Restored!) */}
+                                <div onClick={() => window.location.href="analytics.html"} className="bg-white rounded-3xl p-5 border border-slate-100 cursor-pointer flex flex-col justify-between h-40 hover:shadow-lg transition group active:scale-95">
+                                    <div className="bg-slate-50 w-10 h-10 rounded-xl flex items-center justify-center text-slate-600"><i className="fas fa-chart-pie text-lg"></i></div>
+                                    <div><h3 className="font-bold text-lg text-slate-900 leading-tight">City Stats</h3><p className="text-[10px] text-slate-400 font-bold mt-1">Open Data</p></div>
+                                </div>
+
+                                {/* 7. KNOW YOUR LOCAL (Full Width) */}
+                                <div onClick={() => window.location.href="knowyourlocal.html"} className="col-span-2 bg-indigo-50 rounded-3xl p-5 text-indigo-900 border border-indigo-100 cursor-pointer flex items-center justify-between h-20 hover:shadow-md transition group active:scale-95">
+                                    <div className="flex items-center gap-4">
+                                        <div className="bg-white w-10 h-10 rounded-full flex items-center justify-center text-indigo-600 shadow-sm"><i className="fas fa-map-marked-alt"></i></div>
+                                        <div><h3 className="font-bold text-lg leading-none">Know Your Local</h3><p className="text-xs text-indigo-400 font-bold mt-1">MLA, Police, Officials</p></div>
+                                    </div>
+                                    <i className="fas fa-chevron-right text-indigo-300"></i>
+                                </div>
+
+                                {/* 8. HELP CENTER */}
+                                <div onClick={() => window.location.href="support.html"} className="col-span-2 bg-slate-800 rounded-3xl p-5 text-white shadow-lg cursor-pointer flex items-center justify-between h-20 group active:scale-95">
+                                    <div className="flex items-center gap-4">
+                                        <div className="bg-white/10 w-10 h-10 rounded-full flex items-center justify-center"><i className="fas fa-headset"></i></div>
+                                        <h3 className="font-bold text-lg">Help Center</h3>
+                                    </div>
+                                    <div className="text-xs bg-white/20 px-3 py-1 rounded-full font-bold">FAQs & Support</div>
+                                </div>
+
+                            </div>
+                        </div>
+                    )}
+
+                    {view === 'history' && <HistoryView user={user} />}
+                    {view === 'map' && <MapView />}
+                    {view === 'profile' && <ProfileView user={user} profile={profile || {}} onLogout={handleLogout} />}
+
+                    {/* BOTTOM NAV */}
+                    <div className="fixed bottom-0 w-full bg-white border-t border-gray-100 py-3 flex justify-around text-[10px] font-bold text-gray-400 z-50 shadow-[0_-5px_10px_rgba(0,0,0,0.02)]">
+                        <button onClick={() => setView('home')} className={`flex flex-col items-center gap-1 transition ${view === 'home' ? 'text-blue-600' : 'hover:text-gray-600'}`}>
+                            <i className="fas fa-home text-xl"></i> Home
+                        </button>
+                        <button onClick={() => setView('history')} className={`flex flex-col items-center gap-1 transition ${view === 'history' ? 'text-blue-600' : 'hover:text-gray-600'}`}>
+                            <i className="fas fa-clock text-xl"></i> History
+                        </button>
+                        <button onClick={() => setView('map')} className={`flex flex-col items-center gap-1 transition ${view === 'map' ? 'text-blue-600' : 'hover:text-gray-600'}`}>
+                            <i className="fas fa-map-marker-alt text-xl"></i> Map
+                        </button>
+                        <button onClick={() => setView('profile')} className={`flex flex-col items-center gap-1 transition ${view === 'profile' ? 'text-blue-600' : 'hover:text-gray-600'}`}>
+                            <i className="fas fa-user text-xl"></i> Profile
+                        </button>
+                    </div>
+
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

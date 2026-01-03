@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Community Feed - My City</title>
+    
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; color: #1e293b; }
+        .feed-card { transition: transform 0.2s; }
+        .feed-card:active { transform: scale(0.98); }
+        .animate-up { animation: slideUp 0.5s ease-out; }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        .like-bounce { animation: bounce 0.3s; }
+        @keyframes bounce { 0% { transform: scale(1); } 50% { transform: scale(1.4); } 100% { transform: scale(1); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, collection, query, orderBy, onSnapshot, doc, updateDoc, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyCRXSzDVymPLQRjHwJuwh3nYC0FjtLys5o",
+          authDomain: "civic-36b64.firebaseapp.com",
+          projectId: "civic-36b64",
+          storageBucket: "civic-36b64.firebasestorage.app",
+          messagingSenderId: "946072651938",
+          appId: "1:946072651938:web:90652f9faa6e94313eeffb",
+          measurementId: "G-7GR579K7FF"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        window.fb = { auth, db, onAuthStateChanged, collection, query, orderBy, onSnapshot, doc, updateDoc, arrayUnion, arrayRemove };
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        function CommunityFeed() {
+            const [user, setUser] = useState(null);
+            const [realIssues, setRealIssues] = useState([]);
+            const [filter, setFilter] = useState("all"); 
+            const [loading, setLoading] = useState(true);
+
+            // --- 🤖 FIXED FAKE DATA (Text Only) ---
+            const [fakeIssues, setFakeIssues] = useState([
+                { 
+                    id: 'f1', category: 'Road Damage', description: 'Huge pothole in the middle of 100ft road causing traffic jams.', 
+                    district: 'Coimbatore', status: 'Pending', votes: Array(12).fill('x'), 
+                    timestamp: { seconds: Date.now()/1000 - 3600 }
+                },
+                { 
+                    id: 'f2', category: 'Street Light', description: 'Street lights not working for past 3 days in Gandhi Nagar.', 
+                    district: 'Chennai', status: 'Pending', votes: Array(45).fill('x'), 
+                    timestamp: { seconds: Date.now()/1000 - 7200 }
+                },
+                { 
+                    id: 'f3', category: 'Garbage Dump', description: 'Overflowing dustbin near the bus stand. Very bad smell.', 
+                    district: 'Madurai', status: 'Solved', votes: Array(8).fill('x'), 
+                    timestamp: { seconds: Date.now()/1000 - 86400 }
+                },
+                { 
+                    id: 'f4', category: 'Water Leakage', description: 'Drinking water pipe burst near the school entrance.', 
+                    district: 'Salem', status: 'CRITICAL', votes: Array(22).fill('x'), 
+                    timestamp: { seconds: Date.now()/1000 - 10000 }
+                },
+                { 
+                    id: 'f5', category: 'Fallen Tree', description: 'Tree fell due to heavy rain, blocking the side road.', 
+                    district: 'Ooty', status: 'Solved', votes: Array(5).fill('x'), 
+                    timestamp: { seconds: Date.now()/1000 - 150000 }
+                },
+                { 
+                    id: 'f6', category: 'Illegal Parking', description: 'Cars parked on footpath preventing pedestrians walking.', 
+                    district: 'Chennai', status: 'Pending', votes: Array(18).fill('x'), 
+                    timestamp: { seconds: Date.now()/1000 - 2000 }
+                },
+                { 
+                    id: 'f7', category: 'Mosquito Menace', description: 'Stagnant water causing heavy mosquito breeding.', 
+                    district: 'Trichy', status: 'Pending', votes: Array(30).fill('x'), 
+                    timestamp: { seconds: Date.now()/1000 - 50000 }
+                },
+                { 
+                    id: 'f8', category: 'Broken Manhole', description: 'Open manhole cover, extremely dangerous for kids.', 
+                    district: 'Vellore', status: 'CRITICAL', votes: Array(55).fill('x'), 
+                    timestamp: { seconds: Date.now()/1000 - 300 }
+                }
+            ]);
+
+            useEffect(() => {
+                window.fb.onAuthStateChanged(window.fb.auth, (u) => { if (u) setUser(u); });
+
+                const q = window.fb.query(window.fb.collection(window.fb.db, "issues"), window.fb.orderBy("timestamp", "desc"));
+                const unsubscribe = window.fb.onSnapshot(q, (snapshot) => {
+                    const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), votes: doc.data().votes || [] }));
+                    setRealIssues(list);
+                    setLoading(false);
+                });
+                return () => unsubscribe();
+            }, []);
+
+            // Handle Voting (Works for both Real and Fake data!)
+            const toggleVote = async (issue) => {
+                if (issue.id.startsWith('f')) {
+                    const isVoted = issue.votes.includes('me');
+                    const updatedFake = fakeIssues.map(i => {
+                        if (i.id === issue.id) {
+                            return { ...i, votes: isVoted ? i.votes.slice(0, -1) : [...i.votes, 'me'] };
+                        }
+                        return i;
+                    });
+                    setFakeIssues(updatedFake);
+                    return;
+                }
+
+                if (!user) return alert("Please login first");
+                const issueRef = window.fb.doc(window.fb.db, "issues", issue.id);
+                const isVoted = issue.votes.includes(user.uid);
+                if (isVoted) await window.fb.updateDoc(issueRef, { votes: window.fb.arrayRemove(user.uid) });
+                else await window.fb.updateDoc(issueRef, { votes: window.fb.arrayUnion(user.uid) });
+            };
+
+            const shareOnWhatsapp = (issue) => {
+                const text = `🚨 *Civic Issue Reported* 🚨%0A%0ACategory: ${issue.category}%0ALocation: ${issue.district}%0A%0AWe need urgent action! View details on My City App.`;
+                window.open(`https://wa.me/?text=${text}`, '_blank');
+            };
+
+            const allIssues = [...realIssues, ...fakeIssues].sort((a, b) => b.timestamp.seconds - a.timestamp.seconds);
+
+            const filteredIssues = allIssues.filter(i => {
+                if (filter === "solved") return i.status === "Solved";
+                if (filter === "trending") return i.votes.length >= 20;
+                return true;
+            });
+
+            if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>;
+
+            return (
+                <div className="min-h-screen bg-gray-50 pb-20">
+                    
+                    {/* Header */}
+                    <div className="bg-white p-4 sticky top-0 z-10 border-b shadow-sm">
+                        <div className="flex items-center gap-3 mb-4">
+                            <button onClick={() => window.location.href='index.html'} className="p-2 hover:bg-gray-100 rounded-full transition"><i className="fas fa-arrow-left text-gray-600"></i></button>
+                            <h1 className="font-bold text-lg text-gray-800">Community Voice</h1>
+                        </div>
+
+                        {/* Filter Tabs */}
+                        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                            <button onClick={() => setFilter("all")} className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${filter === 'all' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-100 text-gray-500'}`}>
+                                Recent
+                            </button>
+                            <button onClick={() => setFilter("trending")} className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${filter === 'trending' ? 'bg-orange-500 text-white shadow-md' : 'bg-gray-100 text-gray-500'}`}>
+                                🔥 Trending
+                            </button>
+                            <button onClick={() => setFilter("solved")} className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${filter === 'solved' ? 'bg-green-600 text-white shadow-md' : 'bg-gray-100 text-gray-500'}`}>
+                                ✅ Solved Gallery
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Feed */}
+                    <div className="p-4 space-y-4">
+                        {filteredIssues.map((issue) => (
+                            <div key={issue.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden animate-up">
+                                
+                                {/* Header: User & Status */}
+                                <div className="p-3 flex justify-between items-center border-b border-gray-50">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-xs font-bold text-gray-500">
+                                            <i className="fas fa-user"></i>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-bold text-gray-800">Resident</p>
+                                            <p className="text-[10px] text-gray-400">{new Date(issue.timestamp.seconds * 1000).toLocaleDateString()}</p>
+                                        </div>
+                                    </div>
+                                    <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase ${issue.status === 'Solved' ? 'bg-green-100 text-green-700' : issue.status === 'CRITICAL' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                        {issue.status}
+                                    </span>
+                                </div>
+
+                                {/* Content (Text Only) */}
+                                <div className="p-4">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <h3 className="font-bold text-gray-800 text-lg">{issue.category}</h3>
+                                        <div className="text-[10px] font-bold text-gray-400 bg-gray-50 px-2 py-1 rounded">
+                                            <i className="fas fa-map-marker-alt mr-1"></i> {issue.district || "Location"}
+                                        </div>
+                                    </div>
+                                    
+                                    <p className="text-sm text-gray-600 mb-4 leading-relaxed">{issue.description}</p>
+
+                                    {/* Action Bar */}
+                                    <div className="flex items-center justify-between border-t pt-3 mt-2">
+                                        
+                                        {/* Raise Hand Button */}
+                                        <button 
+                                            onClick={() => toggleVote(issue)}
+                                            className={`flex items-center gap-2 text-sm font-bold transition ${
+                                                (user && issue.votes.includes(user.uid)) || issue.votes.includes('me') ? 'text-blue-600' : 'text-gray-500 hover:text-blue-500'
+                                            }`}
+                                        >
+                                            <i className={`fas fa-hand-paper ${(user && issue.votes.includes(user.uid)) || issue.votes.includes('me') ? 'like-bounce' : ''}`}></i>
+                                            <span>{issue.votes.length > 0 ? `${issue.votes.length} Affected` : "Raise Hand"}</span>
+                                        </button>
+
+                                        {/* Share Button */}
+                                        <button onClick={() => shareOnWhatsapp(issue)} className="text-gray-400 hover:text-green-500 transition">
+                                            <i className="fab fa-whatsapp text-lg"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+
+                        {filteredIssues.length === 0 && (
+                            <div className="text-center py-10 text-gray-400">
+                                <i className="fas fa-inbox text-4xl mb-3 opacity-30"></i>
+                                <p className="text-sm">No issues found in this filter.</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<CommunityFeed />);
+    </script>
+</body>
+</html>

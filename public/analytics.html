@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>City Command Center</title>
+    
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; }
+        .sidebar { background: #0f172a; color: white; }
+        .card-grand { background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid rgba(0,0,0,0.05); transition: transform 0.2s; }
+        .card-grand:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .animate-fade { animation: fadeIn 0.8s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        function AnalyticsDashboard() {
+            // FAKE DATA for "Grand" Look
+            const [stats, setStats] = useState({ total: 1248, solved: 1048, critical: 12, rate: 84 });
+            const chartRef1 = useRef(null);
+            const chartRef2 = useRef(null);
+            const chartInstance1 = useRef(null);
+            const chartInstance2 = useRef(null);
+
+            useEffect(() => {
+                // Initialize Charts with Fake Data
+                initCharts();
+            }, []);
+
+            const initCharts = () => {
+                // Chart 1: Categories (Doughnut)
+                if (chartInstance1.current) chartInstance1.current.destroy();
+                const ctx1 = document.getElementById('catChart').getContext('2d');
+                chartInstance1.current = new Chart(ctx1, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Potholes', 'Garbage', 'Water', 'Streetlights', 'Others'],
+                        datasets: [{
+                            data: [450, 300, 200, 150, 148],
+                            backgroundColor: ['#3b82f6', '#ef4444', '#eab308', '#22c55e', '#a855f7'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: { responsive: true, cutout: '70%', plugins: { legend: { position: 'right' } } }
+                });
+
+                // Chart 2: Zones (Bar)
+                if (chartInstance2.current) chartInstance2.current.destroy();
+                const ctx2 = document.getElementById('zoneChart').getContext('2d');
+                chartInstance2.current = new Chart(ctx2, {
+                    type: 'bar',
+                    data: {
+                        labels: ['Anna Nagar', 'T. Nagar', 'Adyar', 'Velachery', 'Mylapore'],
+                        datasets: [{
+                            label: 'Reports by Zone',
+                            data: [320, 280, 250, 210, 188],
+                            backgroundColor: '#0f172a',
+                            borderRadius: 5
+                        }]
+                    },
+                    options: { scales: { y: { beginAtZero: true, grid: { display: false } } } }
+                });
+            };
+
+            // Fake Live Activity Feed
+            const recentActivity = [
+                { category: 'Pothole', loc: 'Anna Nagar', time: '2 mins ago', status: 'Pending', color: 'bg-yellow-100 text-yellow-700' },
+                { category: 'Garbage Dump', loc: 'T. Nagar', time: '15 mins ago', status: 'Solved', color: 'bg-green-100 text-green-700' },
+                { category: 'Live Wire', loc: 'Adyar', time: '22 mins ago', status: 'CRITICAL', color: 'bg-red-100 text-red-700' },
+                { category: 'Water Leak', loc: 'Velachery', time: '45 mins ago', status: 'Solved', color: 'bg-green-100 text-green-700' },
+            ];
+
+            return (
+                <div className="flex min-h-screen">
+                    
+                    {/* Sidebar */}
+                    <div className="w-20 lg:w-64 sidebar flex flex-col justify-between fixed h-full z-20">
+                        <div>
+                            <div className="h-20 flex items-center justify-center lg:justify-start lg:px-6 border-b border-gray-800">
+                                <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-xl font-bold">M</div>
+                                <span className="ml-3 font-bold text-xl hidden lg:block">My City</span>
+                            </div>
+                            <nav className="mt-8 space-y-2 px-2 lg:px-4">
+                                <a href="index.html" className="flex items-center p-3 text-gray-400 hover:bg-gray-800 hover:text-white rounded-xl transition">
+                                    <i className="fas fa-home w-6 text-center"></i> <span className="hidden lg:block ml-3">App Home</span>
+                                </a>
+                                <a href="#" className="flex items-center p-3 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-900/50 transition">
+                                    <i className="fas fa-chart-pie w-6 text-center"></i> <span className="hidden lg:block ml-3">Analytics</span>
+                                </a>
+                                {/* REMOVED ADMIN LINK AS REQUESTED */}
+                            </nav>
+                        </div>
+                        <div className="p-4 hidden lg:block">
+                            <div className="bg-gray-800 rounded-xl p-4">
+                                <p className="text-xs text-gray-400">System Status</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                                    <span className="text-sm font-bold text-green-500">Online</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Main Content */}
+                    <div className="flex-1 ml-20 lg:ml-64 p-8 animate-fade">
+                        
+                        {/* Header */}
+                        <div className="flex justify-between items-center mb-8">
+                            <div>
+                                <h1 className="text-2xl font-bold text-slate-800">Command Center</h1>
+                                <p className="text-slate-500 text-sm">Real-time civic infrastructure analytics.</p>
+                            </div>
+                            <div className="flex gap-3">
+                                <button className="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-50">
+                                    <i className="fas fa-download mr-2"></i> Export Report
+                                </button>
+                                <div className="w-10 h-10 rounded-full bg-slate-200 overflow-hidden">
+                                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Admin" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 4 GRAND CARDS */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                            {/* Total Reports */}
+                            <div className="card-grand p-6 relative overflow-hidden">
+                                <div className="absolute right-0 top-0 w-24 h-24 bg-blue-50 rounded-bl-full -mr-4 -mt-4 z-0"></div>
+                                <div className="relative z-10">
+                                    <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">Total Reports</p>
+                                    <div className="flex items-end gap-3">
+                                        <h2 className="text-4xl font-black text-slate-800">{stats.total}</h2>
+                                        <span className="text-xs font-bold text-green-500 mb-1.5"><i className="fas fa-arrow-up"></i> 12%</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Success Rate */}
+                            <div className="card-grand p-6 relative overflow-hidden">
+                                <div className="absolute right-0 top-0 w-24 h-24 bg-green-50 rounded-bl-full -mr-4 -mt-4 z-0"></div>
+                                <div className="relative z-10">
+                                    <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">Success Rate</p>
+                                    <div className="flex items-end gap-3">
+                                        <h2 className="text-4xl font-black text-green-600">{stats.rate}%</h2>
+                                        <div className="h-1.5 w-full bg-gray-100 rounded-full mb-2 max-w-[80px]">
+                                            <div className="h-full bg-green-500 rounded-full" style={{width: `${stats.rate}%`}}></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Pending */}
+                            <div className="card-grand p-6 relative overflow-hidden">
+                                <div className="absolute right-0 top-0 w-24 h-24 bg-orange-50 rounded-bl-full -mr-4 -mt-4 z-0"></div>
+                                <div className="relative z-10">
+                                    <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">Pending Action</p>
+                                    <h2 className="text-4xl font-black text-orange-500">{stats.total - stats.solved}</h2>
+                                </div>
+                            </div>
+
+                            {/* Critical */}
+                            <div className="card-grand p-6 relative overflow-hidden bg-gradient-to-br from-red-500 to-red-600 text-white border-none">
+                                <div className="relative z-10">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <p className="text-red-100 text-xs font-bold uppercase tracking-wider mb-2">Critical Hazards</p>
+                                            <h2 className="text-4xl font-black">{stats.critical}</h2>
+                                        </div>
+                                        <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
+                                            <i className="fas fa-exclamation-triangle"></i>
+                                        </div>
+                                    </div>
+                                    <p className="text-[10px] mt-2 text-red-100 opacity-80">Requires immediate attention</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* CHARTS SECTION */}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                            <div className="card-grand p-6 lg:col-span-2">
+                                <h3 className="font-bold text-slate-800 mb-4">Reports by District</h3>
+                                <canvas id="zoneChart" height="120"></canvas>
+                            </div>
+                            <div className="card-grand p-6">
+                                <h3 className="font-bold text-slate-800 mb-4">Issue Distribution</h3>
+                                <canvas id="catChart"></canvas>
+                            </div>
+                        </div>
+
+                        {/* RECENT ACTIVITY */}
+                        <div className="card-grand p-6">
+                            <h3 className="font-bold text-slate-800 mb-4">Recent Live Activity</h3>
+                            <div className="space-y-4">
+                                {recentActivity.map((i, index) => (
+                                    <div key={index} className="flex items-center justify-between border-b border-gray-50 pb-3 last:border-0 last:pb-0">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-sm font-bold">
+                                                {i.category.charAt(0)}
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-bold text-slate-800">{i.category}</p>
+                                                <p className="text-xs text-slate-400">{i.loc} • {i.time}</p>
+                                            </div>
+                                        </div>
+                                        <span className={`text-[10px] font-bold px-2 py-1 rounded uppercase ${i.color}`}>
+                                            {i.status}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<AnalyticsDashboard />);
+    </script>
+</body>
+</html>

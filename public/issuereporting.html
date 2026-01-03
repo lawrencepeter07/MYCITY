@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Report Issue - My City</title>
+    
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCRXSzDVymPLQRjHwJuwh3nYC0FjtLys5o" async defer></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #2563eb; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .animate-up { animation: slideUp 0.4s ease-out; }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .map-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 50; display: flex; justify-content: center; align-items: center; }
+        .ticket { background: white; border-radius: 20px; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, collection, addDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyCRXSzDVymPLQRjHwJuwh3nYC0FjtLys5o",
+          authDomain: "civic-36b64.firebaseapp.com",
+          projectId: "civic-36b64",
+          storageBucket: "civic-36b64.firebasestorage.app",
+          messagingSenderId: "946072651938",
+          appId: "1:946072651938:web:90652f9faa6e94313eeffb",
+          measurementId: "G-7GR579K7FF"
+        };
+        const GEMINI_API_KEY = "AIzaSyAoxXXiEhr0FpS_-vHmhiJ7_KzR2DI6Lp0";
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        window.fb = { auth, db, onAuthStateChanged, doc, getDoc, collection, addDoc };
+        window.GEMINI_KEY = GEMINI_API_KEY;
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- 🧠 STRICT AI LOGIC ---
+        async function analyzeImageWithGemini(base64Image) {
+            console.log("🚀 AI Analyzing...");
+            const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
+            
+            const prompt = `
+                Analyze this image strictly. 
+                Is it a visible civic issue (e.g. Pothole, Garbage Dump, Broken Streetlight, Water Leak, Damaged Road)?
+                - IF YES: Return JSON { "category": "Pothole/Garbage/etc", "severity": 1-5, "description": "short description" }
+                - IF NO (Selfie, Document, Animal, Random Object): Return JSON { "category": "Invalid", "severity": 0, "description": "Not a civic issue." }
+                Return ONLY raw JSON.
+            `;
+
+            for (const model of models) {
+                try {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${window.GEMINI_KEY}`;
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: "image/jpeg", data: base64Image } }] }] })
+                    });
+                    if (!response.ok) throw new Error("API Error");
+                    const data = await response.json();
+                    if(!data.candidates || data.candidates.length === 0) throw new Error("Empty Data");
+                    const text = data.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '').trim();
+                    return JSON.parse(text);
+                } catch (e) { console.warn(model + " failed"); }
+            }
+            return { category: "Manual", severity: 0, description: "" };
+        }
+
+        function MapPicker({ onClose, onSelect }) {
+            const mapRef = useRef(null);
+            useEffect(() => {
+                if(!window.google) return;
+                const map = new google.maps.Map(mapRef.current, { center: { lat: 13.0827, lng: 80.2707 }, zoom: 12, disableDefaultUI: true });
+                map.addListener("click", (e) => { onSelect({ lat: e.latLng.lat(), lng: e.latLng.lng() }); onClose(); });
+            }, []);
+            return (
+                <div className="map-modal">
+                    <div className="bg-white p-2 rounded-xl w-[90%] h-[60%] flex flex-col relative shadow-2xl">
+                        <div ref={mapRef} className="flex-1 rounded-lg border border-gray-200"></div>
+                        <button onClick={onClose} className="absolute top-4 right-4 bg-white p-2 rounded-full shadow text-gray-600"><i className="fas fa-times"></i></button>
+                    </div>
+                </div>
+            );
+        }
+
+        function SuccessReceipt({ data }) {
+            const formatLoc = (loc) => (!loc ? "Unknown" : (typeof loc === 'string' ? loc : `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`));
+            return (
+                <div className="h-screen bg-gray-50 flex items-center justify-center p-6 animate-up">
+                    <div className="ticket w-full max-w-sm p-8 text-center">
+                        <div className="w-16 h-16 bg-green-100 text-green-500 rounded-full flex items-center justify-center text-3xl mx-auto mb-4"><i className="fas fa-check"></i></div>
+                        <h2 className="text-2xl font-bold text-gray-800">Submitted!</h2>
+                        <div className="border-t border-dashed border-gray-300 my-6"></div>
+                        <div className="space-y-4 text-left text-sm">
+                            <div className="flex justify-between"><span className="text-gray-400">Complaint ID</span><span className="font-bold font-mono">{data.id}</span></div>
+                            <div className="flex justify-between"><span className="text-gray-400">Location</span><span className="font-bold text-right truncate w-32">{formatLoc(data.location)}</span></div>
+                            <div className="flex justify-between"><span className="text-gray-400">Status</span><span className="font-bold text-yellow-600 bg-yellow-50 px-2 rounded">Reported</span></div>
+                        </div>
+                        <div className="border-t border-dashed border-gray-300 my-6"></div>
+                        <button onClick={() => window.location.href='index.html'} className="w-full bg-gray-900 text-white font-bold py-3.5 rounded-xl shadow-lg">Done</button>
+                    </div>
+                </div>
+            );
+        }
+
+        function ReportPage() {
+            const [user, setUser] = useState(null);
+            const [profile, setProfile] = useState(null);
+            const [preview, setPreview] = useState(null);
+            const [loading, setLoading] = useState(false);
+            const [category, setCategory] = useState("");
+            const [severity, setSeverity] = useState(0);
+            const [description, setDescription] = useState("");
+            
+            // Location States
+            const [locMode, setLocMode] = useState("auto");
+            const [location, setLocation] = useState(null); // Used for Submit
+            const [showMap, setShowMap] = useState(false);
+            
+            // Manual Location Fields
+            const [manualData, setManualData] = useState({ street: '', landmark: '', city: '', phone: '' });
+
+            const [aiFinished, setAiFinished] = useState(false);
+            const [successData, setSuccessData] = useState(null);
+            const [isInvalid, setIsInvalid] = useState(false);
+
+            useEffect(() => {
+                window.fb.onAuthStateChanged(window.fb.auth, async (u) => {
+                    if (!u) { window.location.href = "index.html"; return; } 
+                    setUser(u);
+                    const docSnap = await window.fb.getDoc(window.fb.doc(window.fb.db, "users", u.uid));
+                    if (docSnap.exists()) setProfile(docSnap.data());
+                });
+                getGPS();
+            }, []);
+
+            // Auto-update 'location' string when manual inputs change
+            useEffect(() => {
+                if (locMode === 'manual') {
+                    const { street, landmark, city, phone } = manualData;
+                    if(street || landmark) {
+                        setLocation(`${street}, Near ${landmark}, ${city} | Ph: ${phone}`);
+                    }
+                }
+            }, [manualData, locMode]);
+
+            const getGPS = () => {
+                setLocMode("auto");
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition((pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }));
+                }
+            };
+
+            const handleUpload = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                setLoading(true);
+                setAiFinished(false);
+                setIsInvalid(false);
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                    const base64 = reader.result.split(',')[1];
+                    setPreview(reader.result);
+                    const result = await analyzeImageWithGemini(base64);
+                    
+                    if (result.category === "Invalid") {
+                        setIsInvalid(true); setAiFinished(true); setLoading(false); return;
+                    }
+                    if (result.category === "Manual") {
+                        setCategory("Other"); setDescription("");
+                    } else {
+                        setCategory(result.category); setSeverity(result.severity); setDescription(result.description);
+                    }
+                    setLoading(false);
+                    setAiFinished(true);
+                };
+                reader.readAsDataURL(file);
+            };
+
+            const handleSubmit = async () => {
+                if (!description) { alert("Please enter a description."); return; }
+                setLoading(true);
+                const ticketID = "CIVIC-" + Math.floor(1000 + Math.random() * 9000);
+                
+                // Use current location state. If manual, it's already a formatted string.
+                const finalLocation = location || "Manual Entry (No Data)";
+
+                try {
+                    await window.fb.addDoc(window.fb.collection(window.fb.db, "issues"), {
+                        ticketId: ticketID, userId: user.uid, district: profile.district, zone: profile.zone,
+                        category, severity: severity || 1, description, location: finalLocation, locType: locMode,
+                        status: "Pending", timestamp: new Date(), imageUrl: preview
+                    });
+                    setSuccessData({ id: ticketID, location: finalLocation });
+                } catch(e) { setSuccessData({ id: ticketID, location: finalLocation }); }
+                setLoading(false);
+            };
+
+            if (!profile) return <div className="h-screen w-full flex items-center justify-center"><div className="loader"></div></div>;
+            if (successData) return <SuccessReceipt data={successData} />;
+
+            return (
+                <div className="min-h-screen bg-gray-50 flex flex-col pb-10">
+                    <div className="bg-white p-4 flex items-center gap-3 border-b sticky top-0 z-10">
+                        <button onClick={() => window.location.href='index.html'} className="p-2 hover:bg-gray-100 rounded-full"><i className="fas fa-arrow-left text-gray-600"></i></button>
+                        <h1 className="font-bold text-lg text-gray-800">Report Issue</h1>
+                    </div>
+
+                    <div className="flex-1 p-6 max-w-lg mx-auto w-full animate-up">
+                        {!preview ? (
+                            <label className="block w-full aspect-[4/3] bg-blue-50 border-2 border-dashed border-blue-200 rounded-3xl flex flex-col items-center justify-center cursor-pointer hover:bg-blue-100 transition duration-300 group">
+                                <div className="bg-white p-4 rounded-full shadow-sm mb-3 group-hover:scale-110 transition"><i className="fas fa-camera text-2xl text-blue-500"></i></div>
+                                <span className="font-bold text-blue-600">Take Photo</span>
+                                <input type="file" accept="image/*" onChange={handleUpload} className="hidden" />
+                            </label>
+                        ) : (
+                            <div className="relative rounded-3xl overflow-hidden shadow-lg border border-gray-100 mb-6">
+                                <img src={preview} className="w-full h-48 object-cover" />
+                                <button onClick={() => {setPreview(null); setAiFinished(false); setIsInvalid(false);}} className="absolute top-2 right-2 bg-black/60 text-white px-3 py-1 rounded-full text-xs">Retake</button>
+                            </div>
+                        )}
+
+                        {loading && (
+                            <div className="mt-6 text-center py-8 bg-white rounded-2xl shadow-sm border border-gray-100">
+                                <div className="loader mx-auto mb-3"></div>
+                                <p className="text-gray-800 font-bold animate-pulse">Analyzing Image...</p>
+                            </div>
+                        )}
+
+                        {isInvalid && !loading && (
+                            <div className="mt-6 bg-red-50 p-6 rounded-2xl border border-red-200 text-center animate-up">
+                                <div className="w-12 h-12 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-3 text-xl"><i className="fas fa-times-circle"></i></div>
+                                <h3 className="text-red-700 font-bold text-lg mb-1">Not a Civic Issue</h3>
+                                <p className="text-red-500 text-sm mb-4">Please upload a photo of a real issue (e.g. Pothole, Garbage).</p>
+                                <button onClick={() => {setPreview(null); setAiFinished(false); setIsInvalid(false);}} className="bg-red-600 text-white px-6 py-2 rounded-xl text-sm font-bold shadow-sm">Try Again</button>
+                            </div>
+                        )}
+
+                        {aiFinished && !isInvalid && !loading && (
+                            <div className="space-y-6 animate-up">
+                                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <h3 className="font-bold text-gray-800"><i className="fas fa-magic text-blue-500 mr-2"></i>Issue Details</h3>
+                                        <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">AI Detected</span>
+                                    </div>
+                                    <input type="text" value={category} onChange={(e) => setCategory(e.target.value)} className="w-full p-2 mb-2 border rounded-lg font-bold text-gray-800 bg-gray-50" />
+                                    <textarea value={description} onChange={(e) => setDescription(e.target.value)} className="w-full p-3 border rounded-xl text-sm text-gray-700 bg-gray-50 outline-none h-24"></textarea>
+                                </div>
+
+                                <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                                    <h3 className="font-bold text-gray-800 mb-3"><i className="fas fa-map-marker-alt text-red-500 mr-2"></i>Location</h3>
+                                    
+                                    <div className="flex bg-gray-100 p-1 rounded-xl mb-4">
+                                        <button onClick={getGPS} className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${locMode==='auto'?'bg-white shadow text-blue-600':'text-gray-500'}`}>Auto</button>
+                                        <button onClick={() => setLocMode('manual')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${locMode==='manual'?'bg-white shadow text-blue-600':'text-gray-500'}`}>Manual</button>
+                                        <button onClick={() => {setLocMode('map'); setShowMap(true);}} className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${locMode==='map'?'bg-white shadow text-blue-600':'text-gray-500'}`}>Map</button>
+                                    </div>
+
+                                    <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 text-sm text-gray-600">
+                                        {/* AUTO MODE */}
+                                        {locMode === 'auto' && (location && location.lat ? `📍 GPS: ${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : "Detecting GPS...")}
+                                        
+                                        {/* MAP MODE */}
+                                        {locMode === 'map' && (location && location.lat ? `📍 Selected on Map` : "Tap Map button above")}
+                                        
+                                        {/* MANUAL MODE FORM */}
+                                        {locMode === 'manual' && (
+                                            <div className="space-y-3 mt-1">
+                                                <input placeholder="Street Name" onChange={e => setManualData({...manualData, street: e.target.value})} className="w-full bg-white p-2 rounded border border-blue-200 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                                <input placeholder="Near Landmark" onChange={e => setManualData({...manualData, landmark: e.target.value})} className="w-full bg-white p-2 rounded border border-blue-200 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                                <div className="flex gap-2">
+                                                    <input placeholder="City / Town" onChange={e => setManualData({...manualData, city: e.target.value})} className="w-1/2 bg-white p-2 rounded border border-blue-200 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                                    <input placeholder="Mobile Number" type="tel" onChange={e => setManualData({...manualData, phone: e.target.value})} className="w-1/2 bg-white p-2 rounded border border-blue-200 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <button onClick={handleSubmit} className="w-full py-4 rounded-xl font-bold text-white shadow-xl bg-blue-600 hover:bg-blue-700 transition transform active:scale-95">Submit Report</button>
+                            </div>
+                        )}
+                    </div>
+                    {showMap && <MapPicker onClose={() => setShowMap(false)} onSelect={(loc) => { setLocation(loc); setLocMode('map'); }} />}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<ReportPage />);
+    </script>
+</body>
+</html>

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Request Service - My City</title>
+    
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCRXSzDVymPLQRjHwJuwh3nYC0FjtLys5o" async defer></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        
+        /* Smooth Selection */
+        .item-card { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .item-card:active { transform: scale(0.95); }
+        .selected { box-shadow: 0 0 0 2px #2563eb, 0 4px 12px rgba(37, 99, 235, 0.15); background-color: #eff6ff; transform: scale(1.02); }
+        
+        .animate-up { animation: slideUp 0.4s ease-out; }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        .category-header { position: sticky; top: 0; background: #f8fafc; z-index: 5; padding-top: 1rem; padding-bottom: 0.5rem; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // YOUR CONFIG
+        const firebaseConfig = {
+          apiKey: "AIzaSyCRXSzDVymPLQRjHwJuwh3nYC0FjtLys5o",
+          authDomain: "civic-36b64.firebaseapp.com",
+          projectId: "civic-36b64",
+          storageBucket: "civic-36b64.firebasestorage.app",
+          messagingSenderId: "946072651938",
+          appId: "1:946072651938:web:90652f9faa6e94313eeffb",
+          measurementId: "G-7GR579K7FF"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        window.fb = { auth, db, onAuthStateChanged, collection, addDoc, getDoc, doc };
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        function RequestPage() {
+            const [user, setUser] = useState(null);
+            const [profile, setProfile] = useState(null);
+            const [selectedItem, setSelectedItem] = useState(null);
+            const [reason, setReason] = useState("");
+            const [location, setLocation] = useState(null);
+            const [loading, setLoading] = useState(false);
+            const [successId, setSuccessId] = useState(null);
+
+            useEffect(() => {
+                window.fb.onAuthStateChanged(window.fb.auth, async (u) => {
+                    if (!u) { window.location.href = 'index.html'; return; }
+                    setUser(u);
+                    const docSnap = await window.fb.getDoc(window.fb.doc(window.fb.db, "users", u.uid));
+                    if(docSnap.exists()) setProfile(docSnap.data());
+                });
+                if (navigator.geolocation) navigator.geolocation.getCurrentPosition(pos => setLocation({lat: pos.coords.latitude, lng: pos.coords.longitude}));
+            }, []);
+
+            // EXTENDED CATALOG
+            const catalog = [
+                {
+                    title: "Roads & Traffic",
+                    items: [
+                        { id: 'Speed Breaker', icon: 'fa-road', color: 'text-gray-700', bg: 'bg-gray-200' },
+                        { id: 'New Road Patch', icon: 'fa-layer-group', color: 'text-gray-600', bg: 'bg-gray-300' },
+                        { id: 'Bus Stop Shed', icon: 'fa-bus', color: 'text-blue-600', bg: 'bg-blue-100' },
+                        { id: 'Traffic Mirror', icon: 'fa-circle', color: 'text-orange-600', bg: 'bg-orange-100' }
+                    ]
+                },
+                {
+                    title: "Electrical & Tech",
+                    items: [
+                        { id: 'Street Light', icon: 'fa-lightbulb', color: 'text-yellow-600', bg: 'bg-yellow-100' },
+                        { id: 'CCTV Camera', icon: 'fa-video', color: 'text-indigo-600', bg: 'bg-indigo-100' },
+                        { id: 'New Electric Pole', icon: 'fa-bolt', color: 'text-yellow-700', bg: 'bg-yellow-200' },
+                        { id: 'Wi-Fi Hotspot', icon: 'fa-wifi', color: 'text-blue-500', bg: 'bg-blue-50' }
+                    ]
+                },
+                {
+                    title: "Health & Sanitation",
+                    items: [
+                        { id: 'Public Dustbin', icon: 'fa-trash-alt', color: 'text-green-600', bg: 'bg-green-100' },
+                        { id: 'Mosquito Fogging', icon: 'fa-spray-can', color: 'text-purple-600', bg: 'bg-purple-100' },
+                        { id: 'Drainage Cover', icon: 'fa-square', color: 'text-stone-600', bg: 'bg-stone-200' },
+                        { id: 'Public Toilet', icon: 'fa-restroom', color: 'text-cyan-600', bg: 'bg-cyan-100' }
+                    ]
+                },
+                {
+                    title: "Community & Water",
+                    items: [
+                        { id: 'Tree Sapling', icon: 'fa-tree', color: 'text-emerald-600', bg: 'bg-emerald-100' },
+                        { id: 'Park Bench', icon: 'fa-chair', color: 'text-amber-700', bg: 'bg-amber-100' },
+                        { id: 'Water Connection', icon: 'fa-faucet', color: 'text-blue-600', bg: 'bg-blue-200' },
+                        { id: 'Playground Kit', icon: 'fa-basketball-ball', color: 'text-rose-500', bg: 'bg-rose-100' }
+                    ]
+                }
+            ];
+
+            const handleSubmit = async () => {
+                if (!selectedItem || !reason) return alert("Please select an item and provide a reason.");
+                setLoading(true);
+                const reqId = "REQ-" + Math.floor(10000 + Math.random() * 90000);
+                try {
+                    await window.fb.addDoc(window.fb.collection(window.fb.db, "issues"), {
+                        ticketId: reqId, userId: user.uid, district: profile?.district || "Unknown",
+                        category: `Request: ${selectedItem}`, severity: 1, 
+                        description: `[CAPITAL REQUEST] Reason: ${reason}`, location: location || "GPS Pending",
+                        status: "Under Review", timestamp: new Date(), isRequest: true
+                    });
+                    setSuccessId(reqId);
+                } catch(e) { alert("Error submitting request"); }
+                setLoading(false);
+            };
+
+            if (successId) return (
+                <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 animate-up text-center">
+                    <div className="w-24 h-24 bg-teal-100 rounded-full flex items-center justify-center text-teal-600 text-4xl mb-6 shadow-lg shadow-teal-100"><i className="fas fa-check-circle"></i></div>
+                    <h2 className="text-3xl font-black text-gray-800 mb-2">Application Sent!</h2>
+                    <p className="text-gray-500 mb-8 max-w-xs mx-auto">Your official request for <strong className="text-teal-600">{selectedItem}</strong> has been filed with the city planning committee.</p>
+                    <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100 w-full max-w-sm mb-8">
+                        <div className="flex justify-between mb-3 border-b pb-3"><span className="text-gray-400 text-sm">Reference ID</span> <span className="font-mono font-bold text-gray-800">{successId}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-400 text-sm">Expected Reply</span> <span className="font-bold text-gray-800">15 Days</span></div>
+                    </div>
+                    <button onClick={() => window.location.href='index.html'} className="bg-gray-900 text-white px-10 py-4 rounded-xl font-bold hover:scale-105 transition">Done</button>
+                </div>
+            );
+
+            return (
+                <div className="min-h-screen bg-gray-50 pb-32">
+                    
+                    {/* Header */}
+                    <div className="bg-white px-5 py-4 flex items-center gap-4 border-b sticky top-0 z-20 shadow-sm">
+                        <button onClick={() => window.location.href='index.html'} className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center hover:bg-gray-200 transition"><i className="fas fa-arrow-left text-gray-600"></i></button>
+                        <div>
+                            <h1 className="font-bold text-xl text-gray-900 leading-none">New Request</h1>
+                            <p className="text-xs text-teal-600 font-bold uppercase tracking-wider mt-1">Infrastructure Catalog</p>
+                        </div>
+                    </div>
+
+                    <div className="p-5 max-w-2xl mx-auto">
+                        
+                        {/* Catalog Grid */}
+                        <div className="space-y-6">
+                            {catalog.map((cat, idx) => (
+                                <div key={idx} className="animate-up" style={{animationDelay: `${idx * 0.1}s`}}>
+                                    <h3 className="font-bold text-gray-400 text-xs uppercase tracking-widest mb-3 ml-1">{cat.title}</h3>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                        {cat.items.map(item => (
+                                            <div 
+                                                key={item.id} 
+                                                onClick={() => setSelectedItem(item.id)}
+                                                className={`item-card p-4 rounded-2xl flex flex-col items-center justify-center gap-3 cursor-pointer border ${selectedItem === item.id ? 'selected border-blue-500' : 'bg-white border-gray-100 hover:border-gray-300'}`}
+                                            >
+                                                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${item.bg} ${item.color} text-xl shadow-sm`}>
+                                                    <i className={`fas ${item.icon}`}></i>
+                                                </div>
+                                                <span className={`text-xs font-bold text-center leading-tight ${selectedItem === item.id ? 'text-blue-700' : 'text-gray-600'}`}>{item.id}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                    </div>
+
+                    {/* Bottom Sheet Form */}
+                    <div className={`fixed bottom-0 left-0 w-full bg-white shadow-[0_-5px_20px_rgba(0,0,0,0.1)] rounded-t-3xl p-6 transition-transform duration-300 z-30 ${selectedItem ? 'translate-y-0' : 'translate-y-full'}`}>
+                        <div className="max-w-2xl mx-auto">
+                            <div className="flex justify-between items-center mb-4">
+                                <div>
+                                    <p className="text-xs text-gray-400 uppercase font-bold">Applying For</p>
+                                    <h3 className="text-xl font-black text-gray-800">{selectedItem}</h3>
+                                </div>
+                                <button onClick={() => setSelectedItem(null)} className="text-gray-400 hover:text-gray-600"><i className="fas fa-times text-xl"></i></button>
+                            </div>
+                            
+                            <textarea 
+                                value={reason} 
+                                onChange={(e) => setReason(e.target.value)}
+                                required
+                                className="w-full p-4 rounded-xl bg-gray-50 border border-gray-200 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none text-sm h-28 mb-4 transition"
+                                placeholder="Why is this needed? (e.g., 'Area is too dark', 'Mosquito breeding spot')..."
+                            ></textarea>
+
+                            <button 
+                                onClick={handleSubmit} 
+                                disabled={loading}
+                                className="w-full bg-gray-900 text-white font-bold py-4 rounded-xl shadow-xl hover:bg-black transition flex items-center justify-center gap-2"
+                            >
+                                {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <span>Submit Application <i className="fas fa-paper-plane ml-2"></i></span>}
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<RequestPage />);
+    </script>
+</body>
+</html>

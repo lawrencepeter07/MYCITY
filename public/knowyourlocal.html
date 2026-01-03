@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Know Your Local - My City</title>
+    
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; color: #1e293b; }
+        .animate-up { animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        
+        .card-official { transition: all 0.2s; }
+        .card-official:active { transform: scale(0.98); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyCRXSzDVymPLQRjHwJuwh3nYC0FjtLys5o",
+          authDomain: "civic-36b64.firebaseapp.com",
+          projectId: "civic-36b64",
+          storageBucket: "civic-36b64.firebasestorage.app",
+          messagingSenderId: "946072651938",
+          appId: "1:946072651938:web:90652f9faa6e94313eeffb",
+          measurementId: "G-7GR579K7FF"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        window.fb = { auth, db, onAuthStateChanged, doc, getDoc };
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        function KnowYourLocal() {
+            const [profile, setProfile] = useState(null);
+            const [district, setDistrict] = useState("Coimbatore");
+            const [constituency, setConstituency] = useState("");
+            const [localData, setLocalData] = useState(null);
+            const [loading, setLoading] = useState(true);
+
+            // --- 🗺️ THE MASTER DATABASE (38 DISTRICTS) ---
+            const ALL_TN_DATA = {
+                "Ariyalur": { mp: "Thirumavalavan (VCK)", collector: "P. Ramana Saraswathi IAS", police: "04329-222222", const: [{n: "Ariyalur", m: "K. Chinnappa", p: "DMK"}, {n: "Jayankondam", m: "Ka. So. Ka. Kannan", p: "DMK"}] },
+                "Chengalpattu": { mp: "T.R. Baalu (DMK)", collector: "A.R. Rahul Nadh IAS", police: "044-27426400", const: [{n: "Chengalpattu", m: "M. Varalakshmi", p: "DMK"}, {n: "Tambaram", m: "S.R. Raja", p: "DMK"}, {n: "Pallavaram", m: "I. Karunanithi", p: "DMK"}] },
+                "Chennai": { mp: "Dayanidhi Maran (DMK)", collector: "Rashmi Siddharth Zagade IAS", police: "044-23452345", const: [{n: "Kolathur", m: "M.K. Stalin (CM)", p: "DMK"}, {n: "Chepauk", m: "Udhayanidhi Stalin", p: "DMK"}, {n: "Mylapore", m: "Dha. Velu", p: "DMK"}, {n: "Anna Nagar", m: "M.K. Mohan", p: "DMK"}] },
+                "Coimbatore": { mp: "P.R. Natarajan (CPM)", collector: "Kranthi Kumar Pati IAS", police: "0422-2300250", const: [{n: "Coimbatore North", m: "Amman K. Arjunan", p: "AIADMK"}, {n: "Coimbatore South", m: "Vanathi Srinivasan", p: "BJP"}, {n: "Singanallur", m: "K.R. Jayaram", p: "AIADMK"}, {n: "Kavundampalayam", m: "P.R.G. Arunkumar", p: "AIADMK"}] },
+                "Cuddalore": { mp: "T.R.V.S. Ramesh (DMK)", collector: "K. Balasubramaniam IAS", police: "04142-284353", const: [{n: "Cuddalore", m: "G. Iyappan", p: "DMK"}, {n: "Chidambaram", m: "K.A. Pandian", p: "AIADMK"}] },
+                "Dharmapuri": { mp: "S. Senthilkumar (DMK)", collector: "K. Santhi IAS", police: "04342-230558", const: [{n: "Dharmapuri", m: "S.P. Venkateshwaran", p: "PMK"}, {n: "Pennagaram", m: "G.K. Mani", p: "PMK"}] },
+                "Dindigul": { mp: "P. Velusamy (DMK)", collector: "S. Visakan IAS", police: "0451-2433222", const: [{n: "Dindigul", m: "C. Sreenivasan", p: "AIADMK"}, {n: "Palani", m: "I.P. Senthil Kumar", p: "DMK"}] },
+                "Erode": { mp: "A. Ganeshamurthi (MDMK)", collector: "H. Krishnanunni IAS", police: "0424-2256700", const: [{n: "Erode East", m: "E.V.K.S. Elangovan", p: "INC"}, {n: "Erode West", m: "S. Muthusamy", p: "DMK"}] },
+                "Kallakurichi": { mp: "Gautham Sigamani (DMK)", collector: "Sravan Kumar Jatavath IAS", police: "04151-222333", const: [{n: "Kallakurichi", m: "M. Senthilkumar", p: "AIADMK"}, {n: "Ulundurpet", m: "A.J. Manikannan", p: "DMK"}] },
+                "Kanchipuram": { mp: "G. Selvam (DMK)", collector: "M. Aarthi IAS", police: "044-27238000", const: [{n: "Kanchipuram", m: "C.V.M.P. Ezhilarasan", p: "DMK"}, {n: "Sriperumbudur", m: "K. Selvaperunthagai", p: "INC"}] },
+                "Kanyakumari": { mp: "Vijay Vasanth (INC)", collector: "P.N. Sridhar IAS", police: "04652-220165", const: [{n: "Nagercoil", m: "M.R. Gandhi", p: "BJP"}, {n: "Kanyakumari", m: "N. Thalavai Sundaram", p: "AIADMK"}] },
+                "Karur": { mp: "S. Jothimani (INC)", collector: "T. Prabhu Shankar IAS", police: "04324-255888", const: [{n: "Karur", m: "V. Senthilbalaji", p: "DMK"}, {n: "Aravakurichi", m: "R. Elango", p: "DMK"}] },
+                "Krishnagiri": { mp: "A. Chellakumar (INC)", collector: "V. Jaya Chandra Bhanu Reddy IAS", police: "04343-239500", const: [{n: "Krishnagiri", m: "K. Ashokkumar", p: "AIADMK"}, {n: "Hosur", m: "Y. Prakaash", p: "DMK"}] },
+                "Madurai": { mp: "Su. Venkatesan (CPM)", collector: "M.S. Sangeetha IAS", police: "0452-2531110", const: [{n: "Madurai Central", m: "P.T.R. Palanivel Thiagarajan", p: "DMK"}, {n: "Madurai North", m: "G. Thalapathi", p: "DMK"}, {n: "Madurai South", m: "M. Boominathan", p: "MDMK"}] },
+                "Mayiladuthurai": { mp: "S. Ramalingam (DMK)", collector: "A.P. Mahabharathi IAS", police: "04364-222222", const: [{n: "Mayiladuthurai", m: "S. Rajakumar", p: "INC"}, {n: "Sirkazhi", m: "M. Panneerselvam", p: "DMK"}] },
+                "Nagapattinam": { mp: "M. Selvaraj (CPI)", collector: "A. Arun Thamburaj IAS", police: "04365-252000", const: [{n: "Nagapattinam", m: "J. Mohamed Shanavas", p: "VCK"}, {n: "Kilvelur", m: "V.P. Nagaimaali", p: "CPM"}] },
+                "Namakkal": { mp: "A.K.P. Chinraj (DMK)", collector: "Shreya P. Singh IAS", police: "04286-280002", const: [{n: "Namakkal", m: "P. Ramalingam", p: "DMK"}, {n: "Rasipuram", m: "M. Mathiventhan", p: "DMK"}] },
+                "Nilgiris": { mp: "A. Raja (DMK)", collector: "S.P. Amrith IAS", police: "0423-2444000", const: [{n: "Udhagamandalam", m: "R. Ganesh", p: "INC"}, {n: "Coonoor", m: "K. Ramachandran", p: "DMK"}] },
+                "Perambalur": { mp: "T.R. Paarivendhar (IJK)", collector: "P. Sri Venkata Priya IAS", police: "04328-225300", const: [{n: "Perambalur", m: "M. Prabhakaran", p: "DMK"}, {n: "Kunnam", m: "S.S. Sivasankar", p: "DMK"}] },
+                "Pudukkottai": { mp: "S. Thirunavukkarasar (INC)", collector: "Kavitha Ramu IAS", police: "04322-221800", const: [{n: "Pudukkottai", m: "V. Muthuraja", p: "DMK"}, {n: "Aranthangi", m: "T. Ramachandran", p: "INC"}] },
+                "Ramanathapuram": { mp: "K. Navas Kani (IUML)", collector: "Johny Tom Varghese IAS", police: "04567-230000", const: [{n: "Ramanathapuram", m: "K. Muthuramalingam", p: "DMK"}, {n: "Paramakudi", m: "S. Murugesan", p: "DMK"}] },
+                "Ranipet": { mp: "S. Jagathrakshakan (DMK)", collector: "D. Baskara Pandian IAS", police: "04172-271000", const: [{n: "Ranipet", m: "R. Gandhi", p: "DMK"}, {n: "Arcot", m: "J.L. Eswarappan", p: "DMK"}] },
+                "Salem": { mp: "S.R. Parthiban (DMK)", collector: "S. Karmegam IAS", police: "0427-2451313", const: [{n: "Salem North", m: "R. Rajendran", p: "DMK"}, {n: "Salem South", m: "E. Balasubramanian", p: "AIADMK"}] },
+                "Sivaganga": { mp: "Karti P. Chidambaram (INC)", collector: "P. Madhusudhan Reddy IAS", police: "04575-240444", const: [{n: "Sivaganga", m: "P.R. Senthilnathan", p: "AIADMK"}, {n: "Karaikudi", m: "S. Mangudi", p: "INC"}] },
+                "Tenkasi": { mp: "Dhanush M. Kumar (DMK)", collector: "P. Akash IAS", police: "04633-222222", const: [{n: "Tenkasi", m: "S. Palani Nadar", p: "INC"}, {n: "Sankarankovil", m: "E. Raja", p: "DMK"}] },
+                "Thanjavur": { mp: "S.S. Palanimanickam (DMK)", collector: "Dinesh Ponraj Oliver IAS", police: "04362-230000", const: [{n: "Thanjavur", m: "T.K.G. Neelamegam", p: "DMK"}, {n: "Kumbakonam", m: "G. Anbalagan", p: "DMK"}] },
+                "Theni": { mp: "P. Raveendranath Kumar (AIADMK)", collector: "R.V. Shajeevana IAS", police: "04546-252000", const: [{n: "Bodinayakkanur", m: "O. Panneerselvam", p: "AIADMK"}, {n: "Cumbum", m: "N. Eramakrishnan", p: "DMK"}] },
+                "Thoothukudi": { mp: "Kanimozhi Karunanidhi (DMK)", collector: "K. Senthil Raj IAS", police: "0461-2340000", const: [{n: "Thoothukudi", m: "P. Geetha Jeevan", p: "DMK"}, {n: "Kovilpatti", m: "Kadambur C. Raju", p: "AIADMK"}] },
+                "Tiruchirappalli": { mp: "Su. Thirunavukkarasar (INC)", collector: "M. Pradeep Kumar IAS", police: "0431-2333333", const: [{n: "Trichy West", m: "K.N. Nehru", p: "DMK"}, {n: "Trichy East", m: "Inigo Irudayaraj", p: "DMK"}] },
+                "Tirunelveli": { mp: "S. Gnanathiraviam (DMK)", collector: "V. Vishnu IAS", police: "0462-2500000", const: [{n: "Tirunelveli", m: "N. Nainar Nagendran", p: "BJP"}, {n: "Palayamkottai", m: "M. Abdul Wahab", p: "DMK"}] },
+                "Tirupathur": { mp: "C.N. Annadurai (DMK)", collector: "Amar Kushwaha IAS", police: "04179-222222", const: [{n: "Tirupathur", m: "A. Nallathambi", p: "DMK"}, {n: "Ambur", m: "A.C. Vilwanathan", p: "DMK"}] },
+                "Tiruppur": { mp: "K. Subbarayan (CPI)", collector: "T. Christuraj IAS", police: "0421-2971100", const: [{n: "Tiruppur North", m: "K.N. Vijayakumar", p: "AIADMK"}, {n: "Tiruppur South", m: "K. Selvaraj", p: "DMK"}] },
+                "Tiruvallur": { mp: "K. Jayakumar (INC)", collector: "Alby John Varghese IAS", police: "044-27661000", const: [{n: "Tiruvallur", m: "V.G. Raajendran", p: "DMK"}, {n: "Avadi", m: "S.M. Nasar", p: "DMK"}] },
+                "Tiruvannamalai": { mp: "C.N. Annadurai (DMK)", collector: "B. Murugesh IAS", police: "04175-233333", const: [{n: "Tiruvannamalai", m: "E.V. Velu", p: "DMK"}, {n: "Chengam", m: "M.P. Giri", p: "DMK"}] },
+                "Tiruvarur": { mp: "M. Selvaraj (CPI)", collector: "T. Charusree IAS", police: "04366-222222", const: [{n: "Tiruvarur", m: "K. Poondi Kalaivanan", p: "DMK"}, {n: "Mannargudi", m: "T.R.B. Rajaa", p: "DMK"}] },
+                "Vellore": { mp: "D.M. Kathir Anand (DMK)", collector: "P. Kumaravel Pandian IAS", police: "0416-2250000", const: [{n: "Vellore", m: "P. Karthikeyan", p: "DMK"}, {n: "Katpadi", m: "Durai Murugan", p: "DMK"}] },
+                "Viluppuram": { mp: "D. Ravikumar (VCK)", collector: "C. Palani IAS", police: "04146-222222", const: [{n: "Viluppuram", m: "R. Lakshmanan", p: "DMK"}, {n: "Vikravandi", m: "N. Pugazhenthi", p: "DMK"}] },
+                "Virudhunagar": { mp: "B. Manickam Tagore (INC)", collector: "J. Meghanatha Reddy IAS", police: "04562-252000", const: [{n: "Virudhunagar", m: "A.R.R. Seenivasan", p: "DMK"}, {n: "Sivakasi", m: "A.M.S.G. Ashokan", p: "INC"}] }
+            };
+
+            const ALL_DISTRICTS = Object.keys(ALL_TN_DATA).sort();
+
+            useEffect(() => {
+                window.fb.onAuthStateChanged(window.fb.auth, async (u) => {
+                    if (u) {
+                        const docSnap = await window.fb.getDoc(window.fb.doc(window.fb.db, "users", u.uid));
+                        if (docSnap.exists()) {
+                            const d = docSnap.data().district || "Coimbatore";
+                            const validDistrict = ALL_TN_DATA[d] ? d : "Coimbatore";
+                            setDistrict(validDistrict);
+                            updateData(validDistrict);
+                        }
+                    } else {
+                        updateData("Coimbatore");
+                    }
+                    setLoading(false);
+                });
+            }, []);
+
+            const updateData = (dist) => {
+                const data = ALL_TN_DATA[dist];
+                setLocalData(data);
+                setConstituency(data.const[0].n);
+            };
+
+            const handleDistrictChange = (e) => {
+                const d = e.target.value;
+                setDistrict(d);
+                updateData(d);
+            };
+
+            const handleCallMLA = (mlaName) => {
+                const confirmCall = confirm(`Dialing Office of ${mlaName}?\n(Redirecting to Official Public Helpline)`);
+                if (confirmCall) {
+                    window.location.href = "tel:1913"; // Public Grievance Helpline
+                }
+            };
+
+            if (loading) return <div className="h-screen flex items-center justify-center"><div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div></div>;
+
+            const selectedMLA = localData.const.find(c => c.n === constituency) || localData.const[0];
+
+            return (
+                <div className="min-h-screen bg-gray-50 pb-20">
+                    
+                    {/* Header */}
+                    <div className="bg-white p-5 border-b sticky top-0 z-20 shadow-sm">
+                        <div className="flex items-center gap-3 mb-4">
+                            <button onClick={() => window.location.href='index.html'} className="p-2 hover:bg-gray-100 rounded-full transition"><i className="fas fa-arrow-left text-gray-600"></i></button>
+                            <h1 className="font-bold text-lg text-gray-800">Local Representatives</h1>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="relative">
+                                <label className="text-[10px] font-bold text-gray-400 uppercase absolute -top-1.5 left-2 bg-white px-1">District</label>
+                                <select value={district} onChange={handleDistrictChange} className="w-full p-3 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-800 outline-none focus:border-blue-500 appearance-none">
+                                    {ALL_DISTRICTS.map(d => <option key={d} value={d}>{d}</option>)}
+                                </select>
+                                <i className="fas fa-chevron-down absolute right-3 top-4 text-xs text-gray-400 pointer-events-none"></i>
+                            </div>
+                            <div className="relative">
+                                <label className="text-[10px] font-bold text-gray-400 uppercase absolute -top-1.5 left-2 bg-white px-1">Constituency</label>
+                                <select value={constituency} onChange={(e) => setConstituency(e.target.value)} className="w-full p-3 bg-white border border-blue-200 rounded-xl text-sm font-bold text-blue-700 outline-none focus:border-blue-500 appearance-none">
+                                    {localData.const.map(c => <option key={c.n} value={c.n}>{c.n}</option>)}
+                                </select>
+                                <i className="fas fa-chevron-down absolute right-3 top-4 text-xs text-blue-400 pointer-events-none"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-6 max-w-lg mx-auto animate-up space-y-6">
+
+                        {/* 1. MLA CARD (Detailed - No WhatsApp) */}
+                        <div>
+                            <div className="flex items-center gap-2 mb-3">
+                                <span className="w-2 h-6 bg-green-500 rounded-full"></span>
+                                <h3 className="font-bold text-gray-800">Your MLA</h3>
+                                <span className="ml-auto text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Verified</span>
+                            </div>
+                            
+                            <div className="card-official bg-white rounded-2xl shadow-lg border border-green-50 overflow-hidden relative">
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-green-50 rounded-full -mr-10 -mt-10 blur-2xl opacity-50"></div>
+                                
+                                <div className="p-6 relative z-10">
+                                    <h2 className="text-2xl font-black text-gray-800 leading-tight mb-1">{selectedMLA.m}</h2>
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <span className="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-1 rounded uppercase">{selectedMLA.p} Party</span>
+                                        <span className="text-xs text-gray-400 font-medium">• {selectedMLA.n} Constituency</span>
+                                    </div>
+                                    
+                                    <button 
+                                        onClick={() => handleCallMLA(selectedMLA.m)}
+                                        className="w-full bg-green-600 text-white py-4 rounded-xl text-sm font-bold shadow-lg shadow-green-200 flex items-center justify-center gap-3 active:scale-95 transition"
+                                    >
+                                        <i className="fas fa-phone-alt"></i> Call Official Office
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 2. MP CARD */}
+                        <div>
+                            <div className="flex items-center gap-2 mb-3">
+                                <span className="w-2 h-6 bg-orange-500 rounded-full"></span>
+                                <h3 className="font-bold text-gray-800">Member of Parliament</h3>
+                            </div>
+                            <div className="bg-white p-5 rounded-2xl shadow-sm border border-orange-100 flex items-center gap-4">
+                                <div className="w-14 h-14 rounded-full bg-orange-50 flex items-center justify-center text-orange-500 text-2xl border-2 border-white shadow-sm flex-shrink-0">
+                                    <i className="fas fa-landmark"></i>
+                                </div>
+                                <div className="flex-1">
+                                    <h4 className="font-bold text-gray-800 text-sm">{localData.mp}</h4>
+                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{district} District</p>
+                                </div>
+                                <button className="w-10 h-10 rounded-full bg-gray-50 text-gray-400 flex items-center justify-center hover:bg-orange-50 hover:text-orange-600 transition">
+                                    <i className="fas fa-info-circle"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* 3. OFFICIALS & EMERGENCY */}
+                        <div>
+                            <div className="flex items-center gap-2 mb-3">
+                                <span className="w-2 h-6 bg-slate-700 rounded-full"></span>
+                                <h3 className="font-bold text-gray-800">District Officials</h3>
+                            </div>
+                            
+                            <div className="space-y-3">
+                                {/* Collector Card with Google Calendar */}
+                                <div className="bg-slate-800 text-white p-4 rounded-xl shadow-lg flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center"><i className="fas fa-briefcase"></i></div>
+                                        <div>
+                                            <h4 className="font-bold text-sm">District Collector</h4>
+                                            <p className="text-xs text-slate-400">{localData.collector}</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right flex flex-col items-end">
+                                        <div className="text-[10px] text-slate-400 mb-1">Grievance Day</div>
+                                        <a 
+                                            href={`https://calendar.google.com/calendar/render?action=TEMPLATE&text=Grievance+Day+Meeting&dates=20241028T100000Z/20241028T110000Z&details=Meeting+with+${localData.collector}+at+Collectorate.&location=${district}+Collector+Office&sf=true&output=xml`}
+                                            target="_blank"
+                                            className="bg-white/20 px-2 py-1 rounded text-[10px] font-bold hover:bg-blue-600 transition flex items-center gap-1"
+                                        >
+                                            <i className="far fa-calendar-plus"></i> Mon 10 AM
+                                        </a>
+                                    </div>
+                                </div>
+
+                                {/* Police */}
+                                <div className="bg-white border border-red-100 p-4 rounded-xl flex items-center justify-between shadow-sm">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-red-50 text-red-600 rounded-full flex items-center justify-center"><i className="fas fa-shield-alt"></i></div>
+                                        <div>
+                                            <h4 className="font-bold text-gray-800 text-sm">Police Control Room</h4>
+                                            <p className="text-xs text-gray-500">{district} HQ</p>
+                                        </div>
+                                    </div>
+                                    <a href={`tel:${localData.police}`} className="flex flex-col items-center gap-1">
+                                        <div className="w-8 h-8 rounded-full bg-red-600 text-white flex items-center justify-center shadow-lg shadow-red-200"><i className="fas fa-phone"></i></div>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<KnowYourLocal />);
+    </script>
+</body>
+</html>
